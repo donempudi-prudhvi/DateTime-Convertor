@@ -114,8 +114,8 @@ function updateClocks() {
 
 // Custom Conversion Calculator core parser algorithm logic
 function processCustomCalculation() {
-  const inputDateTimeValue = calcTimeInput.value; // Returns ISO literal: "YYYY-MM-DDTHH:MM"
-  const selectedOriginZone = calcZoneSelect.value; // Origin Timezone value
+  const inputDateTimeValue = calcTimeInput.value; // "YYYY-MM-DDTHH:MM"
+  const selectedOriginZone = calcZoneSelect.value; // e.g., "America/New_York"
 
   if (!inputDateTimeValue || !selectedOriginZone) {
     calcOutputDisplay.textContent = "Select input parameters...";
@@ -123,25 +123,46 @@ function processCustomCalculation() {
   }
 
   try {
-    // Treat the user's manual numeric input exactly as an independent clock time string in the target zone
+    // 1. Break the user's input string down into parts
+    const [datePart, timePart] = inputDateTimeValue.split('T');
+    const [year, month, day] = datePart.split('-');
+    const [hour, minute] = timePart.split(':');
+
+    // 2. Create an international date formatter for the origin timezone
+    // We force it to use a 24-hour cycle and ISO style parts to map easily
     const formatter = new Intl.DateTimeFormat('en-US', {
       timeZone: selectedOriginZone,
       year: 'numeric', month: '2-digit', day: '2-digit',
       hour: '2-digit', minute: '2-digit', second: '2-digit',
-      hour12: false
+      hourCycle: 'h23'
     });
 
-    // Create a targeted instance mapping back calculation relative parameters
-    const targetZonedDate = new Date(inputDateTimeValue);
+    // 3. Find the exact mathematical absolute UTC time for that target zone moment
+    // We do this by creating a base date, calculating the offset difference, and shifting it
+    const testDate = new Date(Date.UTC(year, month - 1, day, hour, minute));
     
-    // Format shifts calculation logic safely mapping structural elements back to browser's true local runtime zone
-    const localTimeOutputStr = targetZonedDate.toLocaleString('en-US', {
+    // Format test date to see what the target zone thinks it is
+    const parts = formatter.formatToParts(testDate);
+    const partMap = Object.fromEntries(parts.map(p => [p.type, p.value]));
+    
+    const formattedTargetDate = new Date(Date.UTC(
+      partMap.year, partMap.month - 1, partMap.day, 
+      partMap.hour, partMap.minute, partMap.second
+    ));
+
+    // Calculate absolute time difference in milliseconds
+    const diff = testDate.getTime() - formattedTargetDate.getTime();
+    const correctAbsoluteDate = new Date(testDate.getTime() + diff);
+
+    // 4. Output the correct date and time in your browser's true local timezone
+    const localTimeOutputStr = correctAbsoluteDate.toLocaleString('en-US', {
       dateStyle: 'medium',
       timeStyle: 'short'
     });
 
     calcOutputDisplay.textContent = localTimeOutputStr;
   } catch (err) {
+    console.error(err);
     calcOutputDisplay.textContent = "Error parsing input timezone calculations.";
   }
 }
