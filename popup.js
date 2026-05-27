@@ -6,6 +6,11 @@ const targetLabel = document.getElementById('target-zone-label');
 const favContainer = document.getElementById('favorites-container');
 const errorMsg = document.getElementById('error-msg');
 
+// Calculator Element Hooks
+const calcTimeInput = document.getElementById('calc-input-time');
+const calcZoneSelect = document.getElementById('calc-input-zone');
+const calcOutputDisplay = document.getElementById('calc-output-display');
+
 let favoriteZones = []; 
 
 const timeOptions = {
@@ -13,32 +18,17 @@ const timeOptions = {
   timeStyle: 'medium',
 };
 
-// 1. Calculate and build precise GMT strings (e.g., "GMT+05:30")
 function getGMTOffsetStr(zone) {
   try {
     const now = new Date();
-    // Format to extract components in target timezone
     const tzString = now.toLocaleString('en-US', { timeZone: zone, timeZoneName: 'longOffset' });
     const match = tzString.match(/GMT([+-]\d+:\d+)/);
-    
-    if (match) return `GMT${match[1]}`;
-    
-    // Fallback manual math approximation if longOffset is restricted
-    const parts = Intl.DateTimeFormat('en-US', { hour: '2-digit', hourCycle: 'h23', timeZone: zone }).formatToParts(now);
-    const targetHour = parseInt(parts.find(p => p.type === 'hour').value, 10);
-    const utcHour = now.getUTCHours();
-    let diff = targetHour - utcHour;
-    if (diff > 12) diff -= 24;
-    if (diff < -12) diff += 24;
-    
-    const sign = diff >= 0 ? '+' : '-';
-    return `GMT${sign}${String(Math.abs(diff)).padStart(2, '0')}:00`;
+    return match ? `GMT${match[1]}` : 'GMT+00:00';
   } catch (e) {
     return 'GMT+00:00';
   }
 }
 
-// 2. Fetch standard short descriptive abbreviations (PST, IST, CET)
 function getTimezoneNotation(zone) {
   try {
     const parts = Intl.DateTimeFormat('en-US', { timeZoneName: 'short', timeZone: zone }).formatToParts(new Date());
@@ -49,56 +39,50 @@ function getTimezoneNotation(zone) {
   }
 }
 
-// 3. Populate picklist utilizing exact single entry deduplication matching rules
-function populateTimezones() {
+// Generate the dropdown lists for both dropdown components
+function populateAllTimezoneDropdowns() {
   const allTimezones = Intl.supportedValuesOf('timeZone');
   const seenOptions = new Set();
   const sortedOptionsList = [];
 
   allTimezones.forEach(zone => {
-    // Generate clean city identifier names
     const rawCityName = zone.split('/').pop().replace(/_/g, ' ');
     if (!rawCityName || zone.startsWith('Etc/')) return;
 
     const gmtStr = getGMTOffsetStr(zone);
     const notation = getTimezoneNotation(zone);
-    
-    // Create notation layout string format: "PST" or "IST"
     const notationStr = notation ? ` ${notation}` : '';
-    
-    // Enforce target uniform naming format requested: GMT+2 City Time notation
     const fullDisplayText = `${gmtStr} ${rawCityName} Time${notationStr}`;
     
-    // Unique fingerprint deduplication constraint check
     if (!seenOptions.has(fullDisplayText)) {
       seenOptions.add(fullDisplayText);
-      sortedOptionsList.push({
-        zoneValue: zone,
-        displayText: fullDisplayText,
-        offsetValue: gmtStr
-      });
+      sortedOptionsList.push({ zoneValue: zone, displayText: fullDisplayText });
     }
   });
 
-  // Sort numerical values linearly based upon global GMT relative offsets
   sortedOptionsList.sort((a, b) => a.displayText.localeCompare(b.displayText));
 
-  // Build element fragments into the DOM picklist
+  // Build options into both elements
   sortedOptionsList.forEach(opt => {
-    const option = document.createElement('option');
-    option.value = opt.zoneValue;
-    option.textContent = opt.displayText;
-    zoneSelect.appendChild(option);
+    const el1 = document.createElement('option');
+    el1.value = opt.zoneValue;
+    el1.textContent = opt.displayText;
+    zoneSelect.appendChild(el1);
+
+    const el2 = document.createElement('option');
+    el2.value = opt.zoneValue;
+    el2.textContent = opt.displayText;
+    calcZoneSelect.appendChild(el2);
   });
 }
 
 function updateClocks() {
   const now = new Date();
 
-  // Live Sync UTC Main Label
+  // UTC Live tracking
   utcClock.textContent = now.toLocaleString('en-US', { ...timeOptions, timeZone: 'UTC' }) + ' UTC';
 
-  // Live Sync Target Display Card
+  // Live convert track card
   const selectedZone = zoneSelect.value;
   if (selectedZone) {
     try {
@@ -108,19 +92,16 @@ function updateClocks() {
       
       const cleanCity = selectedZone.split('/').pop().replace(/_/g, ' ');
       targetLabel.textContent = `${cleanCity} Time ${notation ? `(${notation})` : ''}`;
-    } catch (e) {
-      targetClock.textContent = "Error formatting time";
-    }
+    } catch (e) { }
   }
 
-  // Active validation state toggle for favorite stars
   if (favoriteZones.includes(selectedZone)) {
     favBtn.classList.add('active');
   } else {
     favBtn.classList.remove('active');
   }
 
-  // Update live ticking inside top shelf boxes 
+  // Live favorites list card refresh tracking loops
   const favElements = favContainer.querySelectorAll('.fav-item');
   favElements.forEach(item => {
     const zone = item.getAttribute('data-zone');
@@ -129,6 +110,40 @@ function updateClocks() {
       item.querySelector('.fav-item-time').textContent = timeStr;
     } catch (e) { }
   });
+}
+
+// Custom Conversion Calculator core parser algorithm logic
+function processCustomCalculation() {
+  const inputDateTimeValue = calcTimeInput.value; // Returns ISO literal: "YYYY-MM-DDTHH:MM"
+  const selectedOriginZone = calcZoneSelect.value; // Origin Timezone value
+
+  if (!inputDateTimeValue || !selectedOriginZone) {
+    calcOutputDisplay.textContent = "Select input parameters...";
+    return;
+  }
+
+  try {
+    // Treat the user's manual numeric input exactly as an independent clock time string in the target zone
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: selectedOriginZone,
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit',
+      hour12: false
+    });
+
+    // Create a targeted instance mapping back calculation relative parameters
+    const targetZonedDate = new Date(inputDateTimeValue);
+    
+    // Format shifts calculation logic safely mapping structural elements back to browser's true local runtime zone
+    const localTimeOutputStr = targetZonedDate.toLocaleString('en-US', {
+      dateStyle: 'medium',
+      timeStyle: 'short'
+    });
+
+    calcOutputDisplay.textContent = localTimeOutputStr;
+  } catch (err) {
+    calcOutputDisplay.textContent = "Error parsing input timezone calculations.";
+  }
 }
 
 function removeFavorite(zoneToRemove) {
@@ -141,7 +156,6 @@ function removeFavorite(zoneToRemove) {
 
 function renderFavoritesShelf() {
   favContainer.innerHTML = ''; 
-  
   favoriteZones.forEach(zone => {
     const item = document.createElement('div');
     item.className = 'fav-item';
@@ -159,28 +173,35 @@ function renderFavoritesShelf() {
       <button class="remove-fav-btn" title="Remove Favorite">×</button>
     `;
 
-    item.querySelector('.remove-fav-btn').addEventListener('click', () => {
-      removeFavorite(zone);
-    });
-
+    item.querySelector('.remove-fav-btn').addEventListener('click', () => { removeFavorite(zone); });
     favContainer.appendChild(item);
   });
 }
 
-// System Execution Instantiation Hooks
-populateTimezones();
+// System Execution Instantiation Sequence Hooks 
+populateAllTimezoneDropdowns();
+
+// Assign Calculator input events to recalculate automatically on change
+calcTimeInput.addEventListener('input', processCustomCalculation);
+calcZoneSelect.addEventListener('change', processCustomCalculation);
 
 chrome.storage.sync.get(['favTimezonesList'], (result) => {
   if (result.favTimezonesList && Array.isArray(result.favTimezonesList)) {
     favoriteZones = result.favTimezonesList.slice(0, 5); 
-  } else {
-    favoriteZones = [];
   }
   
-  zoneSelect.value = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const systemLocalZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  zoneSelect.value = systemLocalZone;
+  calcZoneSelect.value = systemLocalZone;
   
+  // Set default picker text baseline to match current moment time exactly
+  const localNow = new Date();
+  localNow.setMinutes(localNow.getMinutes() - localNow.getTimezoneOffset());
+  calcTimeInput.value = localNow.toISOString().slice(0, 16);
+
   renderFavoritesShelf();
   updateClocks();
+  processCustomCalculation();
   setInterval(updateClocks, 1000);
 });
 
@@ -207,3 +228,18 @@ favBtn.addEventListener('click', () => {
     });
   }
 });
+
+// Click anywhere on wrapper handler to pop open the picker panel directly
+const clickBox = document.getElementById('picker-click-box');
+if (clickBox) {
+  clickBox.addEventListener('click', (e) => {
+    // Prevents double triggers if they happened to click the real icon element
+    if (e.target !== calcTimeInput) {
+      try {
+        calcTimeInput.showPicker(); // Built-in browser method to reveal hidden calendar frame instantly
+      } catch (err) {
+        calcTimeInput.focus();
+      }
+    }
+  });
+}
