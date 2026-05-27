@@ -5,5 +5,6 @@ _This extension helps you to find the exact time in multiple time zones._
 
 Once it is loaded, you should see the below 
 
-![Example of how it works][imageexample.png](imageexample.png)
+<img src="imageexample" alt="Alternative Text" width="500">
+
 Thank me later
